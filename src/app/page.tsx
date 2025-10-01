@@ -11,11 +11,13 @@ interface Cita {
   estado: 'confirmada' | 'cancelada';
 }
 
+type CitaFormData = Pick<Cita, 'servicio' | 'estado'>;
+
 export default function HomePage() {
   const [citas, setCitas] = useState<Cita[]>([]);
-  const [formData, setFormData] = useState({ servicio: '', estado: 'confirmada' as Cita['estado'] });
+  const [formData, setFormData] = useState<CitaFormData>({ servicio: '', estado: 'confirmada' });
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState(''); // <-- NUEVO: Estado para la búsqueda
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     const getCitas = async () => {
@@ -47,7 +49,7 @@ export default function HomePage() {
 
     setEditingId(null);
     setFormData({ servicio: '', estado: 'confirmada' });
-    setSearchTerm(''); // Limpia la búsqueda después de guardar
+    setSearchTerm('');
   };
 
   const handleDelete = async (id: string) => {
@@ -60,13 +62,11 @@ export default function HomePage() {
     setFormData({ servicio: cita.servicio, estado: cita.estado });
   };
   
-  // <-- NUEVO: Prepara el formulario para crear desde la búsqueda
   const handleCreateFromSearch = () => {
-    setEditingId(null); // Asegurarse de que no estamos en modo edición
+    setEditingId(null);
     setFormData({ servicio: searchTerm, estado: 'confirmada' });
   };
 
-  // <-- NUEVO: Filtra las citas en base a la búsqueda
   const filteredCitas = citas.filter(cita =>
     cita.servicio.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -84,6 +84,15 @@ export default function HomePage() {
           required
           style={{ padding: '8px', flexGrow: 1, border: '1px solid #ccc', borderRadius: '5px' }}
         />
+        {/* ----- CORRECCIÓN 1: SELECTOR DE ESTADO AÑADIDO ----- */}
+        <select 
+          value={formData.estado} 
+          onChange={(e) => setFormData({ ...formData, estado: e.target.value as Cita['estado'] })}
+          style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '5px' }}
+        >
+          <option value="confirmada">Confirmada</option>
+          <option value="cancelada">Cancelada</option>
+        </select>
         <button type="submit" style={{ padding: '8px 12px', cursor: 'pointer' }}>
           {editingId ? 'Actualizar' : 'Crear'}
         </button>
@@ -91,7 +100,6 @@ export default function HomePage() {
 
       <hr style={{ margin: '20px 0' }}/>
       
-      {/* SECCIÓN DE BÚSQUEDA Y LISTA */}
       <h2>Citas Agendadas ({filteredCitas.length})</h2>
       <input
         type="text"
@@ -101,7 +109,6 @@ export default function HomePage() {
         style={{ width: '100%', padding: '10px', marginBottom: '20px', border: '1px solid #ccc', borderRadius: '5px' }}
       />
       
-      {/* MENSAJE CUANDO NO HAY RESULTADOS */}
       {searchTerm && filteredCitas.length === 0 && (
         <div style={{ textAlign: 'center', padding: '20px', background: '#f9f9f9', borderRadius: '5px' }}>
           <p>No se encontró ningún servicio llamado "<strong>{searchTerm}</strong>".</p>
@@ -111,11 +118,17 @@ export default function HomePage() {
         </div>
       )}
       
-      {/* LISTA DE CITAS FILTRADAS */}
       <div style={{ display: 'grid', gap: '10px' }}>
         {filteredCitas.map((cita) => (
           <div key={cita.id} style={{ border: '1px solid #ccc', padding: '10px', borderRadius: '5px' }}>
             <p><strong>Servicio:</strong> {cita.servicio}</p>
+            {/* ----- CORRECCIÓN 2: VISUALIZACIÓN DEL ESTADO AÑADIDA ----- */}
+            <p>
+              <strong>Estado:</strong> 
+              <span style={{ color: cita.estado === 'confirmada' ? 'green' : 'red', fontWeight: 'bold' }}>
+                {cita.estado}
+              </span>
+            </p>
             <div style={{ marginTop: '10px' }}>
               <button onClick={() => handleEdit(cita)} style={{ marginRight: '10px' }}>Editar</button>
               <button onClick={() => handleDelete(cita.id)}>Borrar</button>
