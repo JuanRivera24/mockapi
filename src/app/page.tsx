@@ -1,126 +1,124 @@
 // src/app/page.tsx
-
-'use client'; // Directiva necesaria en Next.js App Router para usar hooks
+'use client';
 
 import { useState, useEffect, FormEvent } from 'react';
-
 
 const API_URL = 'https://68dc72c27cd1948060aa515b.mockapi.io/citas';
 
 interface Cita {
-  id: string; 
-  createdAt: string;
-  usuario_id: number;
-  fecha: string;
+  id: string;
   servicio: string;
   estado: 'confirmada' | 'cancelada';
 }
 
-//estado
-type CitaFormData = Pick<Cita, 'servicio' | 'estado'>;
-
-
 export default function HomePage() {
-  // Estados para manejar la lista de citas y los datos del formulario
   const [citas, setCitas] = useState<Cita[]>([]);
-  const [formData, setFormData] = useState<CitaFormData>({ servicio: '', estado: 'confirmada' });
-  const [editingId, setEditingId] = useState<string | null>(null); // Para saber si estamos editando
+  const [formData, setFormData] = useState({ servicio: '', estado: 'confirmada' as Cita['estado'] });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState(''); // <-- NUEVO: Estado para la búsqueda
 
-  // --- READ (LEER) ---
-  const fetchCitas = async () => {
-    try {
-      const response = await fetch(API_URL);
-      const data: Cita[] = await response.json();
-      setCitas(data);
-    } catch (error) {
-      console.error('Error al obtener las citas:', error);
-    }
-  };
-  
-  // ejecuta por primera vez
   useEffect(() => {
-    fetchCitas();
+    const getCitas = async () => {
+      const response = await fetch(API_URL);
+      const data = await response.json();
+      setCitas(data);
+    };
+    getCitas();
   }, []);
 
-  // --- CREATE (CREAR) y UPDATE (ACTUALIZAR) ---
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSave = async (e: FormEvent) => {
     e.preventDefault();
+    const isEditing = editingId !== null;
+    const method = isEditing ? 'PUT' : 'POST';
+    const url = isEditing ? `${API_URL}/${editingId}` : API_URL;
 
-    const method = editingId ? 'PUT' : 'POST';
-    const url = editingId ? `${API_URL}/${editingId}` : API_URL;
+    const response = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(formData),
+    });
+    const savedCita = await response.json();
 
-    try {
-      const response = await fetch(url, {
-        method: method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...formData, fecha: new Date().toISOString(), usuario_id: 1 }),
-      });
-
-      if (response.ok) {
-        fetchCitas(); 
-        setFormData({ servicio: '', estado: 'confirmada' });
-        setEditingId(null);
-      }
-    } catch (error) {
-      console.error('Error al guardar la cita:', error);
+    if (isEditing) {
+      setCitas(citas.map(c => (c.id === editingId ? savedCita : c)));
+    } else {
+      setCitas([...citas, savedCita]);
     }
+
+    setEditingId(null);
+    setFormData({ servicio: '', estado: 'confirmada' });
+    setSearchTerm(''); // Limpia la búsqueda después de guardar
   };
-  
-  // --- DELETE (BORRAR) ---
+
   const handleDelete = async (id: string) => {
-    try {
-      const response = await fetch(`${API_URL}/${id}`, {
-        method: 'DELETE',
-      });
-
-      if (response.ok) {
-        setCitas(citas.filter((cita) => cita.id !== id));
-      }
-    } catch (error) {
-      console.error('Error al borrar la cita:', error);
-    }
+    await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
+    setCitas(citas.filter(c => c.id !== id));
   };
-  
-  // Función para entrar en modo edición
+
   const handleEdit = (cita: Cita) => {
     setEditingId(cita.id);
     setFormData({ servicio: cita.servicio, estado: cita.estado });
   };
+  
+  // <-- NUEVO: Prepara el formulario para crear desde la búsqueda
+  const handleCreateFromSearch = () => {
+    setEditingId(null); // Asegurarse de que no estamos en modo edición
+    setFormData({ servicio: searchTerm, estado: 'confirmada' });
+  };
+
+  // <-- NUEVO: Filtra las citas en base a la búsqueda
+  const filteredCitas = citas.filter(cita =>
+    cita.servicio.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div style={{ fontFamily: 'sans-serif', padding: '20px', maxWidth: '800px', margin: 'auto' }}>
       <h1>Gestión de Citas</h1>
       
-      <form onSubmit={handleSubmit} style={{ marginBottom: '20px', display: 'flex', gap: '10px' }}>
+      <form onSubmit={handleSave} style={{ marginBottom: '20px', display: 'flex', gap: '10px' }}>
         <input
           type="text"
           placeholder="Nombre del servicio"
           value={formData.servicio}
           onChange={(e) => setFormData({ ...formData, servicio: e.target.value })}
           required
-          style={{ padding: '8px', flexGrow: 1 }}
+          style={{ padding: '8px', flexGrow: 1, border: '1px solid #ccc', borderRadius: '5px' }}
         />
-        <select 
-          value={formData.estado} 
-          onChange={(e) => setFormData({ ...formData, estado: e.target.value as Cita['estado'] })}
-          style={{ padding: '8px' }}
-        >
-          <option value="confirmada">Confirmada</option>
-          <option value="cancelada">Cancelada</option>
-        </select>
         <button type="submit" style={{ padding: '8px 12px', cursor: 'pointer' }}>
-          {editingId ? 'Actualizar Cita' : 'Crear Cita'}
+          {editingId ? 'Actualizar' : 'Crear'}
         </button>
       </form>
+
+      <hr style={{ margin: '20px 0' }}/>
       
+      {/* SECCIÓN DE BÚSQUEDA Y LISTA */}
+      <h2>Citas Agendadas ({filteredCitas.length})</h2>
+      <input
+        type="text"
+        placeholder="🔍 Buscar por nombre de servicio..."
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+        style={{ width: '100%', padding: '10px', marginBottom: '20px', border: '1px solid #ccc', borderRadius: '5px' }}
+      />
+      
+      {/* MENSAJE CUANDO NO HAY RESULTADOS */}
+      {searchTerm && filteredCitas.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '20px', background: '#f9f9f9', borderRadius: '5px' }}>
+          <p>No se encontró ningún servicio llamado "<strong>{searchTerm}</strong>".</p>
+          <button onClick={handleCreateFromSearch} style={{ marginTop: '10px' }}>
+            + Crear este servicio
+          </button>
+        </div>
+      )}
+      
+      {/* LISTA DE CITAS FILTRADAS */}
       <div style={{ display: 'grid', gap: '10px' }}>
-        {citas.map((cita) => (
+        {filteredCitas.map((cita) => (
           <div key={cita.id} style={{ border: '1px solid #ccc', padding: '10px', borderRadius: '5px' }}>
-            <p><strong>ID:</strong> {cita.id} | <strong>Servicio:</strong> {cita.servicio}</p>
-            <p><strong>Estado:</strong> <span style={{ color: cita.estado === 'confirmada' ? 'green' : 'red' }}>{cita.estado}</span></p>
+            <p><strong>Servicio:</strong> {cita.servicio}</p>
             <div style={{ marginTop: '10px' }}>
-              <button onClick={() => handleEdit(cita)} style={{ marginRight: '10px', cursor: 'pointer' }}>Editar</button>
-              <button onClick={() => handleDelete(cita.id)} style={{ cursor: 'pointer' }}>Borrar</button>
+              <button onClick={() => handleEdit(cita)} style={{ marginRight: '10px' }}>Editar</button>
+              <button onClick={() => handleDelete(cita.id)}>Borrar</button>
             </div>
           </div>
         ))}
